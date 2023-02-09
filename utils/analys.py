@@ -1,8 +1,9 @@
 import pandas as df
 import numpy as np
 
-def rating(df):
-    pass
-
-def get_cities(df):
-    return np.sort(df.City.unique())
+def list_to_numpy_array(lst):
+    if isinstance(lst, list):
+        items = [list_to_numpy_array(item) for item in lst]
+        return np.concatenate(items)
+    else:
+        return np.array(lst)
