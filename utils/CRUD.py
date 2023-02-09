@@ -85,6 +85,37 @@ def read_top_ranks(connection, where):
     if record:
         return record
 
+
+def read_top_ranks_facilities(connection, where):
+    cursor = connection.cursor()
+    record = ""
+    try:
+        query = """select cafe_df.Name , Rating, total.total_sum from cafe_df join
+    (select facilities_df.ID, sum(قلیان+سفارش_تلفنی
+                   +اینترنت_رایگان+
+               DJ+بازی_و_سرگرمی+سیگار_آزاد+فضای_باز+شبانه_روزی
+                   +چشم_انداز+بوفه+دسترسی_ویلچر+
+               فضای_بازی_کودک+موسیقی_زنده+پارکینگ
+               ) as total_sum from
+                    facilities_df
+    group by facilities_df.ID) total on cafe_df.ID = total.ID
+         JOIN location_df on cafe_df.ID = location_df.ID
+             where  {key}=N'{value}' COLLATE utf8_persian_ci
+    group by cafe_df.ID
+    order by cafe_df.Rating desc, cafe_df.Number_of_Ratings desc
+         limit 10;
+        """.format(key=list(where.keys())[0], value=list(where.values())[0])
+        cursor.execute(query)
+        record = cursor.fetchall()
+        connection.commit()
+        print("Read successful")
+    except Exception as err:
+        print(err)
+    cursor.close()
+    connection.close()
+    if record:
+        return record
+
 def update(connection, table_name, column_name, data, where):
     cursor = connection.cursor()
     query = """
