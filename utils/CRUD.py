@@ -18,52 +18,6 @@ def connect():
         print("Error occurred in making connection …")
         traceback.print_exc()
 
-
-def create(connection, table_name, columns):
-    cursor = connection.cursor()
-    query = """
-    create table {table_name}(ID int AUTO_INCREMENT primary key""".format(table_name=table_name)
-    for column in columns:
-        query += ", {key} {value}".format(key=column, value=columns[column])
-    query += ");"
-    try:
-        cursor.execute(query)
-        connection.commit()
-        print("table created successfully!")
-    except Exception as err:
-        print(err)
-    cursor.close()
-    connection.close()
-
-
-def insert(connection, table_name, values):
-    cursor = connection.cursor()
-    query = """
-    INSERT INTO {table_name}  VALUES {values}""".format(table_name=table_name, values=values)
-    try:
-        cursor.execute(query)
-        connection.commit()
-        print("Records inserted successfully!")
-    except Exception as err:
-        print(err)
-    cursor.close()
-    connection.close()
-
-
-def read(connection, table_name):
-    cursor = connection.cursor()
-    try:
-        query = "SELECT * FROM {table_name};".format(table_name=table_name)
-        cursor.execute(query)
-        record = cursor.fetchall()
-        connection.commit()
-        print("Read successful")
-    except Exception as err:
-        print(err)
-    cursor.close()
-    connection.close()
-    return record
-
 def read_top_ranks(connection, where):
     cursor = connection.cursor()
     record = ""
@@ -116,34 +70,125 @@ def read_top_ranks_facilities(connection, where):
     if record:
         return record
 
-def update(connection, table_name, column_name, data, where):
+
+def read_best_facilities(connection, where):
     cursor = connection.cursor()
-    query = """
-    UPDATE {table_name} SET {column_name}={data} WHERE {key}=N'{value}';
-    """.format(table_name=table_name, column_name=column_name, data=data, key=list(where.keys())[0], value=list(where.values())[0])
+    record = ""
     try:
+        query = """select  sum(سفارش_تلفنی) 'سفارش تلفنی',
+                           sum(بازی_و_سرگرمی) 'بازی و سرگرمی',
+                           sum(موسیقی_زنده) 'موسیقی زنده',
+                           sum(قلیان) 'قلیان',
+                           sum(اینترنت_رایگان) 'اینترنت رایگان',
+                           sum(سیگار_آزاد) 'سیگار آزاد',
+                           sum(فضای_باز) 'فضای باز',
+                           sum(شبانه_روزی) 'شبانه روزی',
+                           sum(چشم_انداز) 'چشم انداز',
+                           sum(پارکینگ) 'پارکینگ',
+                           sum(بوفه) 'بوفه',
+                           sum(دسترسی_ویلچر) 'دسترسی ویلچر',
+                           sum(DJ) 'DJ',
+                           sum(فضای_بازی_کودک)  'فضای بازی کودک' from (select facilities_df.* from cafe_df
+                    join facilities_df on cafe_df.ID= facilities_df.ID
+                    join location_df on cafe_df.ID = location_df.ID
+                    where  {key}=N'{value}' COLLATE utf8_persian_ci
+                    order by cafe_df.Rating desc , cafe_df.Number_of_Ratings desc
+                    limit 50) t;
+        """.format(key=list(where.keys())[0], value=list(where.values())[0])
         cursor.execute(query)
+        field_names = [i[0] for i in cursor.description]
+        record = cursor.fetchall()
         connection.commit()
-        print("Update successful")
+        print("Read successful")
     except Exception as err:
         print(err)
     cursor.close()
     connection.close()
+    if record:
+        return record,field_names
 
 
-def delete(connection, table_name, where):
+def read_time_average(connection, where):
     cursor = connection.cursor()
-    query = """
-    DELETE FROM {table_name} WHERE {key}={value};
-    """.format(table_name=table_name, key=list(where.keys())[0], value=list(where.values())[0])
+    record = ""
     try:
+        query = """select sec_to_time(avg(TIME_TO_SEC(t.working_hours))) time,
+                    case
+                        when Rating between 0 and 2.5 then '0 - 2.5'
+                        when Rating between 2.5 and 5 then '2.5 - 5'
+                        when Rating between 5 and 7.5 then '5 - 7.5'
+                        when Rating between 7.5 and 10 then '7.5 - 10'
+                    end as rate_range
+                from(select Name, Rating, Number_of_Ratings, timediff(Close_time,Open_time) 'working_hours' from cafe_df
+                join time_df on cafe_df.ID=time_df.ID
+                join location_df on cafe_df.ID = location_df.ID
+                where  {key}=N'{value}' COLLATE utf8_persian_ci
+                order by working_hours desc
+                limit 50) t
+                group by rate_range
+                order by time;
+            """.format(key=list(where.keys())[0], value=list(where.values())[0])
         cursor.execute(query)
+        record = cursor.fetchall()
         connection.commit()
-        print("Delete successful")
+        print("Read successful")
     except Exception as err:
         print(err)
     cursor.close()
     connection.close()
+    if record:
+        return record
+
+
+def read_rating_variant_foodtype(connection, where):
+    cursor = connection.cursor()
+    record = ""
+    try:
+        query = """select cd.Name, cd.Rating, sum(فرنگی+فرانسوی+ایتالیایی+ایرانی+چینی+کره_ای+گیاهی+ژاپنی+عربی+افغانی+ترکیه_ای+کیک_و_شیرینی+سالاد+پیتزا
+                        +استیک+پاستا+کباب+ساندویچ+املت_و_نیمرو+محلی+دیزی+سوخاری+برگر+مدیترانه_ای+هندی+سوشی+گیلکی+ماهی
+                        +فرنگی+فرانسوی+ایتالیایی+ایرانی+چینی+کره_ای+گیاهی+ژاپنی+عربی+افغانی+ترکیه_ای+کیک_و_شیرینی+سالاد
+                        +پیتزا+استیک+پاستا+کباب+ساندویچ+املت_و_نیمرو+محلی+دیزی+سوخاری+برگر+مدیترانه_ای+هندی+سوشی+گیلکی
+                    +ماهی+آش+لازانیا+سوپ+غذای_دریایی+میگو+حلیم+کله_پاچه) as food_type from food_type_df
+                    join cafe_df cd on food_type_df.ID = cd.ID
+                    join location_df on cd.ID = location_df.ID
+                    where  {key}=N'{value}' COLLATE utf8_persian_ci
+                    group by cd.ID
+                    order by food_type desc
+                    limit 10
+                """.format(key=list(where.keys())[0], value=list(where.values())[0])
+        cursor.execute(query)
+        record = cursor.fetchall()
+        connection.commit()
+        print("Read successful")
+    except Exception as err:
+        print(err)
+    cursor.close()
+    connection.close()
+    if record:
+        return record
+
+def read_cities_with_most_top_restaurants(connection):
+    cursor = connection.cursor()
+    record = ""
+    try:
+        query = """select City, count(Name) from(select Name, Rating, Number_of_Ratings, City from cafe_df
+                    join location_df on cafe_df.ID = location_df.ID
+                    order by Rating desc , Number_of_Ratings desc
+                    limit 100) t
+                    group by City
+                    order by count(Name) desc;
+                    """
+        cursor.execute(query)
+        record = cursor.fetchall()
+        connection.commit()
+        print("Read successful")
+    except Exception as err:
+        print(err)
+    cursor.close()
+    connection.close()
+    if record:
+        return record
+
 
 def get_cities(connection):
     cursor = connection.cursor()
@@ -172,67 +217,3 @@ def top_restaaturants(connection, tables, city):
          order by Rating desc, Number_of_Ratings desc
         LIMIT 10
     """
-
-def csv_to_value(df):
-    values = ""
-    for i in range(len(df)):
-        if i > 0:
-            values += ","
-        values += "({i},".format(i=i+1)
-        for j in range(len(df.columns)):
-            if j > 0:
-                values += ","
-            temp = df.iloc[i, j]
-            if isinstance(temp, str):
-                values += '"' + temp + '"'
-            else:
-                values += str(temp)
-        values += ")"
-    values += ";"
-    return values
-
-
-if __name__ == '__main__':
-    cafe_df = pd.read_csv('../../Downloads/Telegram Desktop/cafe_df.csv')
-    location_df = pd.read_csv('../../Downloads/Telegram Desktop/location_df.csv')
-    time_df = pd.read_csv('../../Downloads/Telegram Desktop/time_df.csv')
-    facilities_df = pd.read_csv('../../Downloads/Telegram Desktop/facilities_df.csv')
-    food_type_df = pd.read_csv('../../Downloads/Telegram Desktop/food_type_df.csv')
-
-    cafe_df_columns = {"Name": "text", "Rating": "float", "Number_of_Ratings": "int"}
-    location_df_columns = {"Latitude": "float", "Longitude": "float", "City": "text", "Address": "text"}
-    time_df_columns = {"Work_period": "text", "Work_time": "text"}
-    facilities_df_columns = {}
-    for col in facilities_df.columns:
-        facilities_df_columns[col] = "bool"
-    food_type_df_columns = {}
-    for col in food_type_df.columns:
-        food_type_df_columns[col] = "bool"
-
-    cafe_df_values = csv_to_value(cafe_df)
-    location_df_values = csv_to_value(location_df)
-    time_df_values = csv_to_value(time_df)
-    facilities_df_values = csv_to_value(facilities_df)
-    food_type_df_values = csv_to_value(food_type_df)
-
-    connection = connect()
-    create(connection, "cafe_df", cafe_df_columns)
-    connection = connect()
-    create(connection, "location_df", location_df_columns)
-    connection = connect()
-    create(connection, "time_df", time_df_columns)
-    connection = connect()
-    create(connection, "facilities_df", facilities_df_columns)
-    connection = connect()
-    create(connection, "food_type_df", food_type_df_columns)
-
-    connection = connect()
-    insert(connection, "cafe_df", cafe_df_values)
-    connection = connect()
-    insert(connection, "location_df", location_df_values)
-    connection = connect()
-    insert(connection, "time_df", time_df_values)
-    connection = connect()
-    insert(connection, "facilities_df", facilities_df_values)
-    connection = connect()
-    insert(connection, "food_type_df", food_type_df_values)
